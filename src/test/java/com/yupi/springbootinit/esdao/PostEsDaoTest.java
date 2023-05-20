@@ -4,11 +4,10 @@ import com.yupi.springbootinit.model.dto.post.PostEsDTO;
 import com.yupi.springbootinit.model.dto.post.PostQueryRequest;
 import com.yupi.springbootinit.model.entity.Post;
 import com.yupi.springbootinit.service.PostService;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.List;
-import java.util.Optional;
+
+import java.util.*;
 import javax.annotation.Resource;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Page;
@@ -50,18 +49,23 @@ public class PostEsDaoTest {
     @Test
     void testAdd() {
         PostEsDTO postEsDTO = new PostEsDTO();
-        postEsDTO.setId(1L);
-        postEsDTO.setTitle("test");
-        postEsDTO.setContent("test");
+        postEsDTO.setId(2L);
+        postEsDTO.setTitle("卢本伟牛逼");
+        postEsDTO.setContent("从现在开始，这里就是卢本伟广场。伞兵一号卢本伟准备就绪！");
         postEsDTO.setTags(Arrays.asList("java", "python"));
-        postEsDTO.setThumbNum(1);
-        postEsDTO.setFavourNum(1);
         postEsDTO.setUserId(1L);
         postEsDTO.setCreateTime(new Date());
         postEsDTO.setUpdateTime(new Date());
         postEsDTO.setIsDelete(0);
         postEsDao.save(postEsDTO);
         System.out.println(postEsDTO.getId());
+    }
+
+    @Test
+    void testGetByTitle() {
+        List<PostEsDTO> postEsDTOList = new ArrayList<>();
+        postEsDTOList = postEsDao.findByTitle("卢本伟");
+        System.out.println(postEsDTOList);
     }
 
     @Test
