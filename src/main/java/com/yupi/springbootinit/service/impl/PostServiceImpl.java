@@ -38,22 +38,27 @@ import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
 import org.elasticsearch.search.sort.SortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
+import org.elasticsearch.search.suggest.SuggestBuilder;
+import org.elasticsearch.search.suggest.SuggestBuilders;
+import org.elasticsearch.search.suggest.completion.CompletionSuggestionBuilder;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.elasticsearch.core.ElasticsearchRestTemplate;
 import org.springframework.data.elasticsearch.core.SearchHit;
 import org.springframework.data.elasticsearch.core.SearchHits;
 import org.springframework.data.elasticsearch.core.query.NativeSearchQuery;
 import org.springframework.data.elasticsearch.core.query.NativeSearchQueryBuilder;
+import org.springframework.data.elasticsearch.core.suggest.response.Suggest;
 import org.springframework.stereotype.Service;
 
 /**
  * 帖子服务实现
  *
  * @author <a href="https://github.com/liyupi">程序员鱼皮</a>
- * @from <a href="https://yupi.icu">编程导航知识星球</a>
+ * &#064;from  <a href="https://yupi.icu">编程导航知识星球</a>
  */
 @Service
 @Slf4j
@@ -151,6 +156,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         String sortField = postQueryRequest.getSortField();
         String sortOrder = postQueryRequest.getSortOrder();
         BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+
         // 过滤
         boolQueryBuilder.filter(QueryBuilders.termQuery("isDelete", 0));
         if (id != null) {
@@ -179,9 +185,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         }
         // 按关键词检索
         if (StringUtils.isNotBlank(searchText)) {
-            boolQueryBuilder.should(QueryBuilders.matchQuery("title", searchText));
-            boolQueryBuilder.should(QueryBuilders.matchQuery("description", searchText));
-            boolQueryBuilder.should(QueryBuilders.matchQuery("content", searchText));
+            boolQueryBuilder.should(QueryBuilders.matchQuery("title", searchText).analyzer("ik_max_word"));
+            boolQueryBuilder.should(QueryBuilders.matchQuery("description", searchText).analyzer("ik_max_word"));
+            boolQueryBuilder.should(QueryBuilders.matchQuery("content", searchText).analyzer("ik_max_word"));
             boolQueryBuilder.minimumShouldMatch(1);
         }
         // 按标题检索
@@ -202,16 +208,58 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         }
         // 分页
         PageRequest pageRequest = PageRequest.of((int) current, (int) pageSize);
+
+        //设置搜索关键词高亮
+        //实际上是将查询出来的搜索关键词设置前端标签
+        HighlightBuilder highlightBuilder = new HighlightBuilder()
+                .requireFieldMatch(false)
+                .field("title")
+                .field("content")
+                .preTags("<span style = \"color: red\">")
+                .postTags("</span>");
+
         // 构造查询
-        NativeSearchQuery searchQuery = new NativeSearchQueryBuilder().withQuery(boolQueryBuilder)
-                .withPageable(pageRequest).withSorts(sortBuilder).build();
+        NativeSearchQuery searchQuery = new NativeSearchQueryBuilder()
+                .withQuery(boolQueryBuilder)
+                .withHighlightBuilder(highlightBuilder)
+                .withPageable(pageRequest)
+                .withSorts(sortBuilder).build();
+
         SearchHits<PostEsDTO> searchHits = elasticsearchRestTemplate.search(searchQuery, PostEsDTO.class);
         Page<Post> page = new Page<>();
         page.setTotal(searchHits.getTotalHits());
         List<Post> resourceList = new ArrayList<>();
+
+        HashMap<Long, String> postIdContentHighLight = new HashMap<>();
+        HashMap<Long, String> postIdTitleHighLight = new HashMap<>();
+
         // 查出结果后，从 db 获取最新动态数据（比如点赞数）
         if (searchHits.hasSearchHits()) {
             List<SearchHit<PostEsDTO>> searchHitList = searchHits.getSearchHits();
+
+            //获取命中的高亮文本
+            //注意: content:[]!!!
+            searchHitList.stream().forEach(searchHit -> {
+
+                long postId = searchHit.getContent().getId();
+                List<String> contentHighLights = searchHit.getHighlightField("content");
+                List<String> titleHighLights = searchHit.getHighlightField("title");
+
+                if (CollectionUtils.isNotEmpty(titleHighLights)) {
+                    String titleHighLight = titleHighLights.get(0);
+                    if (StringUtils.isNotBlank(titleHighLight)) {
+                        postIdTitleHighLight.put(postId, titleHighLight);
+                    }
+                }
+
+                if (CollectionUtils.isNotEmpty(contentHighLights)) {
+                    String contentHighLight = contentHighLights.get(0);
+                    if (StringUtils.isNotBlank(contentHighLight)) {
+                        postIdContentHighLight.put(postId, contentHighLight);
+                    }
+                }
+            });
+
             List<Long> postIdList = searchHitList.stream().map(searchHit -> searchHit.getContent().getId())
                     .collect(Collectors.toList());
             List<Post> postList = baseMapper.selectBatchIds(postIdList);
@@ -219,7 +267,17 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
                 Map<Long, List<Post>> idPostMap = postList.stream().collect(Collectors.groupingBy(Post::getId));
                 postIdList.forEach(postId -> {
                     if (idPostMap.containsKey(postId)) {
-                        resourceList.add(idPostMap.get(postId).get(0));
+                        Post post = idPostMap.get(postId).get(0);
+                        String contentHighLight = postIdContentHighLight.get(postId);
+                        String titleHighLight = postIdTitleHighLight.get(postId);
+
+                        if (StringUtils.isNotBlank(titleHighLight)) {
+                            post.setTitle(titleHighLight);
+                        }
+                        if (StringUtils.isNotBlank(contentHighLight)) {
+                            post.setContent(contentHighLight + "<br>" + "<h3>正文:</h3>" + post.getContent());
+                        }
+                        resourceList.add(post);
                     } else {
                         // 从 es 清空 db 已物理删除的数据
                         String delete = elasticsearchRestTemplate.delete(String.valueOf(postId), PostEsDTO.class);
@@ -233,6 +291,46 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     }
 
     @Override
+    public List<String> searchSuggest(String searchText) {
+        HighlightBuilder highlightBuilder = new HighlightBuilder()
+                .field("title")
+                .preTags("<span style = \"color: red\">")
+                .postTags("</span>");
+
+        CompletionSuggestionBuilder suggestionBuilder = SuggestBuilders
+                .completionSuggestion("title.suggest")
+                .prefix(searchText)
+                .size(5);
+
+        SuggestBuilder suggestBuilder = new SuggestBuilder();
+        suggestBuilder.addSuggestion("titleSuggest", suggestionBuilder);
+
+        NativeSearchQuery searchQuery = new NativeSearchQueryBuilder()
+                .withSuggestBuilder(suggestBuilder)
+                .build();
+
+        SearchHits<PostEsDTO> searchHits = elasticsearchRestTemplate.search(searchQuery, PostEsDTO.class);
+        Suggest.Suggestion<? extends Suggest.Suggestion.Entry<? extends Suggest.Suggestion.Entry.Option>> titleSuggest
+                = searchHits.getSuggest().getSuggestion("titleSuggest");
+
+        //可以被理解为一个列表，其中每个元素都是 Suggest.Suggestion.Entry 类型的子类型，
+        //每个子类型都具有一个 Option 属性，而且这个属性的类型是未知的（即用通配符 ? 表示）。
+        //entries中的entry都是一个Suggestion的查询结果
+        List<? extends Suggest.Suggestion.Entry<? extends Suggest.Suggestion.Entry.Option>>
+                entries = titleSuggest.getEntries();
+        Suggest.Suggestion.Entry<? extends Suggest.Suggestion.Entry.Option> entry = entries.get(0);
+
+//      List<? extends Suggest.Suggestion.Entry.Option> options = entry.getOptions();   从entry中取出options
+//      Suggest.Suggestion.Entry.Option option = options.get(0);   从options中取出option
+        List<String> result = new ArrayList<>();
+        for (Suggest.Suggestion.Entry.Option option : entry.getOptions()) {
+            result.add(option.getText());
+        }
+        return result;
+    }
+
+    @Override
+
     public PostVO getPostVO(Post post, HttpServletRequest request) {
         PostVO postVO = PostVO.objToVo(post);
         long postId = post.getId();

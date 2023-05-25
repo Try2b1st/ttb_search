@@ -6,7 +6,9 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.yupi.springbootinit.model.dto.post.PostQueryRequest;
 import com.yupi.springbootinit.model.entity.Post;
 import com.yupi.springbootinit.model.vo.PostVO;
+
 import javax.servlet.http.HttpServletRequest;
+import java.util.List;
 
 /**
  * 帖子服务
@@ -59,10 +61,18 @@ public interface PostService extends IService<Post> {
     Page<PostVO> getPostVOPage(Page<Post> postPage, HttpServletRequest request);
 
     /**
-     *
      * @param postQueryRequest
      * @param request
      * @return
      */
     Page<PostVO> listPostVOByPage(PostQueryRequest postQueryRequest, HttpServletRequest request);
+
+    /**
+     * 当用户在搜索框输入时给搜索建议
+     *
+     * @param searchText
+     * @return
+     */
+    List<String> searchSuggest(String searchText);
+
 }
