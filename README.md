@@ -1,12 +1,4 @@
-# SpringBoot 项目初始模板
-
-> 作者：[程序员鱼皮](https://github.com/liyupi)
-> 仅分享于 [编程导航知识星球](https://yupi.icu)
-
-基于 Java SpringBoot 的项目初始模板，整合了常用框架和主流业务的示例代码。
-
-只需 1 分钟即可完成内容网站的后端！！！大家还可以在此基础上快速开发自己的项目。
-
+# 项目介绍
 [toc]
 
 ## 模板特点
@@ -24,13 +16,10 @@
 ### 数据存储
 
 - MySQL 数据库
-- Redis 内存数据库
 - Elasticsearch 搜索引擎
-- 腾讯云 COS 对象存储
 
 ### 工具类
 
-- Easy Excel 表格处理
 - Hutool 工具库
 - Gson 解析库
 - Apache Commons Lang3 工具类
@@ -38,7 +27,6 @@
 
 ### 业务特性
 
-- Spring Session Redis 分布式登录
 - 全局请求响应拦截器（记录日志）
 - 全局异常处理器
 - 自定义错误码
@@ -72,9 +60,6 @@
 - 合理分层
 
 
-## 快速上手
-
-> 所有需要修改的地方鱼皮都标记了 `todo`，便于大家找到修改的位置~
 
 ### MySQL 数据库
 
@@ -93,44 +78,6 @@ spring:
 
 3）启动项目，访问 `http://localhost:8101/api/doc.html` 即可打开接口文档，不需要写前端就能在线调试接口了~
 
-![](doc/swagger.png)
-
-### Redis 分布式登录
-
-1）修改 `application.yml` 的 Redis 配置为你自己的：
-
-```yml
-spring:
-  redis:
-    database: 1
-    host: localhost
-    port: 6379
-    timeout: 5000
-    password: 123456
-```
-
-2）修改 `application.yml` 中的 session 存储方式：
-
-```yml
-spring:
-  session:
-    store-type: redis
-```
-
-3）移除 `MainApplication` 类开头 `@SpringBootApplication` 注解内的 exclude 参数：
-
-修改前：
-
-```java
-@SpringBootApplication(exclude = {RedisAutoConfiguration.class})
-```
-
-修改后：
-
-
-```java
-@SpringBootApplication
-```
 
 ### Elasticsearch 搜索引擎
 
