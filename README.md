@@ -1,7 +1,61 @@
 # 项目介绍
-[toc]
 
-## 模板特点
+## 项目名称：TTB聚合搜索中台
+
+基于 Vue 3 + Spring Boot + Elastic Stack 的一站式聚合搜索平台，也是简化版的企业级搜索中台。
+对用户来说，使用该平台，可以在同一个页面集中搜索出不同来源、不同类型的内容，提升用户的检索效率和搜索体验。
+对企业来说，当企业内部有多个项目的数据都存在搜索需求时，无需针对每个项目单独开发搜索功能，可以直接将各项目的数据源接入搜索中台，从而提升开发效率、降低系统维护成本。
+
+## 主要工作：
+
+### 前端：
+
+1.基于 Vue 3 + Ant Design Vue 实现响应式页面开发，使用 Tab 组件 + Vue Router 动态路由实现统一页面布局，通过用户点击 Tab 时更改路由来切换各类数据（文章、图片、用户）的搜索结果，并选用不同的组件进行展示。
+2.为解决刷新页面后搜索结果丢失的问题，定义 searchParams 响应式变量来集中保存当前的搜索条件（比如关键词、搜索类别、分页），并通过 Vue Router 的 query 参数将搜索条件同步到 url 的 querystring 中。
+
+### 后端：
+
+1.基于自己二次开发的 Spring Boot 初始化模板 + MyBatis X 插件，快速生成基本数据源的增删改查（比如用户、文章）。
+2.数据源获取： ○使用 HttpClient 请求 离线 获取外部网站的文章，并使用 Hutool 的 JSONUtil 解析和预处理文章，最终入库。○使用 jsoup 实时 请求 bing 搜索接口获取图片，并使用 CSS Selector 语法解析和预处理图片信息，最终返回给前端。
+3 为实现多类数据源的整体搜索，使用 门面模式 在后端对各类数据源的搜索结果进行聚合，统一返回给前端，减少了前端请求次数（N 次到 1 次）以及前端开发复杂度。并通过 CompletableFuture 并发搜索各数据源进一步提升搜索接口性能。
+4.为提高聚合搜索接口的通用性，首先通过定义数据源接口来实现统一的数据源接入标准（比如新数据源必须支持分页）；当新数据源（比如视频）要接入时，只需使用适配器模式对其数据查询接口进行封装、以适配数据源接口，无须修改原有代码，提高了系统的可扩展性。
+5.为减少代码的圈复杂度，使用注册器模式代替 if else 来管理多个数据源对象，调用方可根据名称轻松获取对象，（使用 IDEA MetricReloaded 插件）实测圈复杂度由 XX 减少为 XX。 
+6.为解决文章搜不出的问题，自主搭建 Elasticsearch 来代替 MySQL 的模糊查询，并通过为索引绑定 ik 分词器实现了更灵活的分词搜索，且使用 JMeter 测试后发现搜索性能提升 xx%（xx qps 到 xx qps）。 
+7.构建 ES 文章索引时，采用动静分离的策略，只在 ES 中存储要检索的、修改不频繁字段（比如文章）用于检索，而修改频繁的字段（比如点赞数）从数据库中关联查出，从而减少了 ES 数据更新和同步的成本、保证数据一致性。 
+8.为了更方便地管理 Elasticsearch 中的数据，自主搭建 Kibana 并配置 index pattern 和看板，实现对文章数据的可视化管理。 
+9.开发搜索功能时，使用 Kibana DevTools + DSL 调试 ES 的搜索效果，并使用 Spring Data Elasticsearch 的 QueryBuilder 组合查询条件，实现对 ES 内文章的灵活查询（比如查询同时查询标题和文章中带有指定关键字的内容）。 
+10.自主搭建 Logstash 实现每分钟同步 MySQL 的文章数据到 ES，并通过指定 tracking_column 为更新时间字段解决重复更新的问题。
+11.使用 Knife4j + Swagger 自动生成后端接口文档，并通过编写 ApiOperation 等注解补充接口注释，避免了人工编写维护文档的麻烦。
+
+
+## 技术亮点：
+### 在原有功能上实现了搜索建议
+
+参考官方文档：[https://www.elastic.co/guide/en/elasticsearch/reference/7.17/search-suggesters.htm](https://www.elastic.co/guide/en/elasticsearch/reference/7.17/search-suggesters.html)
+在使用ES实现搜索建议：https://blog.csdn.net/qq_41489540/article/details/121865225
+
+### 在原有功能上实现搜索高亮
+
+参考官方文档：https://www.elastic.co/guide/en/elasticsearch/reference/7.17/highlighting.html
+
+## 待解决：前端防抖节流
+
+问题：用户频繁输入，点击搜索按钮向后端发送请求怎么办？
+
+解决：使用lodash工具库实现防抖和节流
+
+节流：每段时间最多能执行x次(比如服务器限流)
+
+参考文档：https://www.lodashjs.com/docs/lodash.throttle
+
+防抖：等待一段时间内没有其他操作后，才执行操作(比如输入搜索)
+
+参考文档：https://www.lodashjs.com/docs/lodash.debounce
+
+## 使用Java后端模板
+
+作者：程序员鱼皮
+GitHub：https://github.com/liyupi
 
 ### 主流框架 & 特性
 
@@ -59,8 +113,6 @@
 
 - 合理分层
 
-
-
 ### MySQL 数据库
 
 1）修改 `application.yml` 的数据库配置为你自己的：
@@ -106,7 +158,3 @@ PUT post_v1
 
 找到 job 目录下的 `FullSyncPostToEs` 和 `IncSyncPostToEs` 文件，取消掉 `@Component` 注解的注释，再次执行程序即可触发同步：
 
-```java
-// todo 取消注释开启任务
-//@Component
-```
